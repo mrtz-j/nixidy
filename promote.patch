@@ -1,0 +1,161 @@
+From d90ec842dd8a0aea275852d42a5c116284432c18 Mon Sep 17 00:00:00 2001
+From: Arnar Gauti Ingason <arnarg@fastmail.com>
+Date: Fri, 6 Sep 2024 14:20:53 +0200
+Subject: [PATCH] Add support for promotion groups
+
+---
+ modules/applications/default.nix |  5 +++
+ modules/build.nix                | 67 +++++++++++++++++++++++++-------
+ modules/default.nix              | 12 +++---
+ modules/nixidy.nix               |  4 --
+ 4 files changed, 66 insertions(+), 22 deletions(-)
+
+diff --git a/modules/applications/default.nix b/modules/applications/default.nix
+index fbbac96..c43bb65 100644
+--- a/modules/applications/default.nix
++++ b/modules/applications/default.nix
+@@ -94,6 +94,11 @@ in {
+       default = false;
+       description = "Whether or not a namespace resource should be automatically created.";
+     };
++    promotionGroup = mkOption {
++      type = types.str;
++      default = "default";
++      description = "The promotion group the application should be a part of.";
++    };
+     project = mkOption {
+       type = types.str;
+       default = "default";
+diff --git a/modules/build.nix b/modules/build.nix
+index 15f2d76..c7d1b74 100644
+--- a/modules/build.nix
++++ b/modules/build.nix
+@@ -43,6 +43,22 @@
+           '')
+           resources));
+     };
++
++  groupedApps = with lib; groupBy (app: app.value.promotionGroup) (attrsToList config.applications);
++
++  groupOpts = {name, ...}: {
++    options = with lib; {
++      apps = mkOption {
++        type = types.listOf types.str;
++        default = [];
++        internal = true;
++      };
++      environmentPackage = mkOption {
++        type = types.package;
++        internal = true;
++      };
++    };
++  };
+ in {
+   options = with lib; {
+     build = {
+@@ -61,11 +77,42 @@ in {
+         internal = true;
+         description = "The package containing all the applications and an activation script.";
+       };
++      groups = mkOption {
++        type = with types; attrsOf (submodule groupOpts);
++        default = {};
++        internal = true;
++      };
+     };
+   };
+ 
+   config = {
+     build = {
++      groups =
++        lib.mapAttrs (
++          group: apps: let
++            joined = pkgs.linkFarm "nixidy-apps-joined-${group}-${envName}" (map (app: {
++                name = app.value.output.path;
++                path = mkApp app.value;
++              })
++              apps);
++          in {
++            apps = map (app: app.name) apps;
++            environmentPackage = pkgs.symlinkJoin {
++              name = "nixidy-environment-${group}-${envName}";
++              paths = [
++                joined
++                (pkgs.writeTextDir ".nixidy/groups/${group}.json" (builtins.toJSON ({
++                    apps = map (app: app.name) apps;
++                  }
++                  // (lib.optionalAttrs (config.nixidy.build.revision != null) {
++                    revision = config.nixidy.build.revision;
++                  }))))
++              ];
++            };
++          }
++        )
++        groupedApps;
++
+       extrasPackage = pkgs.stdenv.mkDerivation {
+         name = "nixidy-extras-${envName}";
+ 
+@@ -84,20 +131,14 @@ in {
+             config.nixidy.extraFiles));
+       };
+ 
+-      environmentPackage = let
+-        joined = pkgs.linkFarm "nixidy-apps-joined-${envName}" (lib.mapAttrsToList (_: app: {
+-            name = app.output.path;
+-            path = mkApp app;
+-          })
+-          config.applications);
+-      in
+-        pkgs.symlinkJoin {
+-          name = "nixidy-environment-${envName}";
+-          paths = [
+-            joined
++      environmentPackage = pkgs.symlinkJoin {
++        name = "nixidy-environment-${envName}";
++        paths =
++          [
+             config.build.extrasPackage
+-          ];
+-        };
++          ]
++          ++ (lib.mapAttrsToList (_: group: group.environmentPackage) config.build.groups);
++      };
+ 
+       activationPackage = pkgs.stdenv.mkDerivation {
+         name = "nixidy-activation-environment-${envName}";
+diff --git a/modules/default.nix b/modules/default.nix
+index 77136d5..f50b4e3 100644
+--- a/modules/default.nix
++++ b/modules/default.nix
+@@ -29,8 +29,10 @@
+       }
+       // extraSpecialArgs;
+   };
+-in {
+-  inherit (module) config;
+-  inherit (module.config.build) environmentPackage activationPackage;
+-  meta = {inherit (module.config.nixidy.target) repository branch;};
+-}
++in
++  {
++    inherit (module) config;
++    inherit (module.config.build) environmentPackage activationPackage;
++    meta = {inherit (module.config.nixidy.target) repository branch;};
++  }
++  // module.config.build.groups
+diff --git a/modules/nixidy.nix b/modules/nixidy.nix
+index 8d80dd9..b534e87 100644
+--- a/modules/nixidy.nix
++++ b/modules/nixidy.nix
+@@ -227,9 +227,5 @@ in {
+ 
+     _module.args.charts = config.nixidy.charts;
+     nixidy.charts = lib.optionalAttrs (cfg.chartsDir != null) (mkChartAttrs cfg.chartsDir);
+-
+-    nixidy.extraFiles = lib.optionalAttrs (cfg.build.revision != null) {
+-      ".revision".text = cfg.build.revision;
+-    };
+   };
+ }
+
