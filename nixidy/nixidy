@@ -82,7 +82,7 @@ function doBuildAttr() {
     exit 1
   fi
 
-  nix-build "$FILE_PARAM" -A "$ENV_PARAM.environmentPackage" "${BUILD_PARAMS[@]}"
+  nix build -f "$FILE_PARAM" "$ENV_PARAM.environmentPackage" "${BUILD_PARAMS[@]}"
 }
 
 function doBuildFlake() {
@@ -108,7 +108,7 @@ function doSwitchAttr() {
     exit 1
   fi
 
-  ENVIRON=$(nix-build "$FILE_PARAM" -A "$ENV_PARAM.activationPackage" --no-link)
+  ENVIRON=$(nix build -f "$FILE_PARAM" "$ENV_PARAM.activationPackage" --no-link)
 
   "${ENVIRON}/activate"
 }
@@ -138,7 +138,7 @@ function doBootstrapAttr() {
     exit 1
   fi
 
-  BOOTSTRAP=$(nix-build "$FILE_PARAM" -A "$ENV_PARAM.bootstrapPackage" --no-link)
+  BOOTSTRAP=$(nix build -f "$FILE_PARAM" "$ENV_PARAM.bootstrapPackage" --no-link)
 
   for manifest in "$BOOTSTRAP"/*.yaml; do
     echo "---"

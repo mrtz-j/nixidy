@@ -19,7 +19,7 @@ jobs:
     - uses: DeterminateSystems/magic-nix-cache-action@v8
 
     - run: |
-        nix-build ./docs -A html --out-link public
+        nix build -f ./docs html --out-link public
 
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3

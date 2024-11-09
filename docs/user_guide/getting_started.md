@@ -133,7 +133,7 @@
     ```
 
     !!! info
-        In the rest of the guide when running the `nixidy` cli (e.g. `nixidy build`) you can run `nix-shell` to enter a nix shell where `nixidy` will be a avilable, with the `shell.nix` example above.
+        In the rest of the guide when running the `nixidy` cli (e.g. `nixidy build`) you can run `nix shell -f .` to enter a nix shell where `nixidy` will be a avilable, with the `shell.nix` example above.
 
     !!! warning
         In the rest of the guide the `nixidy` commands will also use the flakes format (e.g. `nixidy build .#dev`), when using a flake-less setup the `.#` prefix should be removed (e.g. `nixidy build dev`).
